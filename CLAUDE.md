@@ -50,7 +50,7 @@ Other URL hooks, useful for screenshots:
 - `touch.ts`: on-screen controls for touch devices (`(pointer: coarse)`, or `?touch=1` to test on desktop): walk stick, drag to look, Door/Light/Plan/Tape/Rooms buttons that dispatch the same key events, tap to mark the tape point, +/− zoom in plan view. Touch has no pointer lock, so `Walker.touchMode` replaces the lock check.
 - `controls.ts`: pointer-lock walking, 200 mm-radius body, per-axis collision against plan rectangles (mm).
 - `tools.ts`: tape measure and plan view (ortho camera; layer 1 = ceiling-level items hidden in plan; layer 2 = plan-only wall caps).
-- `main.ts`: assembly, `mergeStatic` (one mesh per material), GTAO post-processing, colliders, keys.
+- `main.ts`: loading screen (`#loading` in `index.html`; each build stage awaits a paint so the text updates, and it fades out after frame 3 once textures are in; `__ready` still marks frame 3), assembly, `mergeStatic` (one mesh per material), GTAO post-processing, colliders, keys.
 
 Assets (all CC0, in `public/`):
 - `textures/`: ambientCG scans, `Wood049` (oak), `Fabric019`, `Carpet016` and `PaintedPlaster017` (colour, normal, roughness at 1K), and `Marble012` (grey marble, colour + roughness at 2K, no normal: polished).

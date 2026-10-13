@@ -54,3 +54,14 @@ body.touch #crosshair { width: 10px; height: 10px; margin: -5px 0 0 -5px; }
 .touch-help td { padding: 3px 0; color: #ccc; vertical-align: top; }
 .touch-help td:first-child { width: 90px; font: 600 12px ui-monospace, monospace; color: #d8c7a8; }
 body.touch .card { max-height: 92vh; overflow: auto; margin: 0 12px; }
+
+/* loading screen (main.ts): the spinner is a compositor animation, so it keeps turning while the main thread builds the scene */
+#loading { position: fixed; inset: 0; z-index: 20; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  background: #151412; transition: opacity .5s; }
+#loading.done { opacity: 0; pointer-events: none; }
+#loading h1 { margin: 6px 0 0; font-size: 20px; font-weight: 600; letter-spacing: .02em; }
+#loading-stage { color: #aaa; min-height: 1.4em; }
+.spinner { width: 44px; height: 44px; border-radius: 50%; border: 3px solid #3a3733; border-top-color: #d8c7a8; animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.bar { width: min(260px, 70vw); height: 4px; border-radius: 2px; background: #2a2825; overflow: hidden; }
+#loading-bar { height: 100%; width: 0; background: #d8c7a8; transition: width .25s; }

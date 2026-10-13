@@ -17,7 +17,31 @@ import { PlanView, Tape } from './tools';
 import { initTouch, isTouch } from './touch';
 import { type Rect, furniture, roomAt, viewpoints } from './plan';
 
-THREE.DefaultLoadingManager.onLoad = () => { (window as unknown as { __loaded: boolean }).__loaded = true; };
+// ---- loading screen (index.html #loading) ----
+// Building the scene and compiling shaders block the main thread for a few
+// seconds. Each stage yields a paint first so the screen shows what is going on;
+// it fades out once the textures are in and the first frames are rendered.
+const loadingEl = document.getElementById('loading')!;
+const STAGES = 5;
+let stageNo = 0, assetFrac = 0, sceneReady = false, assetsLoaded = false;
+const setBar = () => { document.getElementById('loading-bar')!.style.width = `${Math.round(((stageNo / STAGES) * 0.75 + assetFrac * 0.25) * 100)}%`; };
+const nextPaint = () => new Promise<void>((r) => requestAnimationFrame(() => setTimeout(r)));
+async function stage(text: string) {
+  document.getElementById('loading-stage')!.textContent = text;
+  stageNo++; setBar();
+  await nextPaint();
+}
+function hideLoading() {
+  if (!sceneReady || !assetsLoaded) return;
+  loadingEl.classList.add('done');
+  setTimeout(() => loadingEl.remove(), 600);
+}
+THREE.DefaultLoadingManager.onProgress = (_url, done, total) => { assetFrac = done / total; setBar(); };
+THREE.DefaultLoadingManager.onLoad = () => {
+  (window as unknown as { __loaded: boolean }).__loaded = true;
+  assetsLoaded = true; assetFrac = 1; setBar(); hideLoading();
+};
+await stage('Setting up the renderer…');
 
 // ---- renderer / scene ----
 const q = new URLSearchParams(location.search);
@@ -44,10 +68,13 @@ const camera = new THREE.PerspectiveCamera(68, innerWidth / innerHeight, 0.03, 6
 camera.layers.enable(1);
 
 // ---- build the apartment ----
+await stage('Loading textures and building the rooms…');
 const M = createMaterials();
 const arch = buildArchitecture(M);
+await stage('Placing furniture…');
 const furn = buildFurniture(M);
 const fix = buildFixtures(M);
+await stage('Setting up lighting…');
 const lighting = buildLighting(scene, M);
 
 const statics = new THREE.Group();
@@ -293,6 +320,7 @@ function perfTick() {
 }
 
 // ---- loop ----
+await stage('Preparing shaders and shadows…'); // the first frames compile them
 const timer = new THREE.Timer();
 timer.connect(document);
 let frames = 0;
@@ -318,7 +346,7 @@ renderer.setAnimationLoop(() => {
   composer.render();
   tape.updateLabel(planMode ? plan.camera : camera, innerWidth, innerHeight);
   perfTick();
-  if (++frames === 3) (window as unknown as { __ready: boolean }).__ready = true;
+  if (++frames === 3) { (window as unknown as { __ready: boolean }).__ready = true; sceneReady = true; hideLoading(); }
 });
 
 Object.assign(window, { __app: { envelopes, walker, camera, setMode, setPlan, goto, scene, renderer, EYE, render: () => { cullModels(planMode ? undefined : roomAt(...walker.planPos)?.id); composer.render(); tape.updateLabel(planMode ? plan.camera : camera, innerWidth, innerHeight); } } });
