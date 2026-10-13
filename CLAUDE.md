@@ -40,6 +40,7 @@ Other URL hooks, useful for screenshots:
   - Walls are emitted **face by face**, not as boxes. Each face is split at room boundaries and at neighbouring solids' edges.
   - Each face takes its finish from `wallFinishes`. Skirting is added on dry painted faces.
   - Openings become sill and lintel solids.
+- `objects.ts`: the detailed hero builders (sofa, bed + bedding, gaming chair, bottom-freezer fridge, top-load washer, pillows), modelled on real products. Downloaded models were checked and none was good enough (CC0 sofas/beds/fridges/washers are antique or flat low-poly), so these are procedural.
 - `furniture.ts`: one parametric builder per item id (or id pattern).
   - Builders work in a local frame: front = +Z, width X, depth Z, origin at the footprint centre. `geom.place` rotates the result by the item's `front`.
   - Handles, taps, trunking and decor are tagged `hw()` / `decor()`, so `?verify` measures only the body.
@@ -56,6 +57,7 @@ Assets (all CC0, in `public/`):
 - `textures/`: ambientCG scans, `Wood049` (oak), `Fabric019`, `Carpet016` and `PaintedPlaster017` (colour, normal, roughness at 1K), and `Marble012` (grey marble, colour + roughness at 2K, no normal: polished).
   - `materials.ts` tints each colour map so its average equals the palette hex (`SCAN_MEAN` holds the scans' sRGB means). Re-measure the mean if you swap a scan.
   - Walnut reuses the oak scan.
+  - Floors, bathroom tiles and the gaming vinyl are composited at load from random crops of scans (`scanTiles` / `scanPlanks` in `materials.ts`: Concrete048, Concrete017, Marble025, Wood095), so no two tiles match. Cabinets use Plastic013A, steel Metal009 (normal only), bed linen Fabric036. Fabrics (`fabric: true`) use `MeshPhysicalMaterial` sheen.
 - `models/`: Poly Haven glTF (1k): `potted_plant_01/02/04`, `ceramic_vase_01/03`. The two floor plants were decimated with meshoptimizer (176k → 58k and 70k → 44k triangles).
 - `env/day.jpg`, `env/evening.jpg`: Poly Haven pure-sky panoramas (`kloofendal_48d_partly_cloudy_puresky`, `qwantani_dusk_2_puresky`).
   - Below the horizon the panorama was replaced with a generated hazy sea, to read as a high-rise sea view.
@@ -106,7 +108,7 @@ Key settled facts that are easy to get wrong:
 - **Ceiling 2800** (assumed).
 - **Living window:** tall, door-like sliding window, sill 140, head 2100. All other windows: standard sliding, sill 900, head 2100.
 - **Bathroom openings:** louvred ventilators with the exhaust fan, not glazed windows.
-- **Floors:** 600×600 tile overlay everywhere except **Bedroom 3**, which is vinyl (smoked oak).
+- **Floors:** 600×600 tile overlay everywhere except **Bedroom 3**, which is vinyl (light ash oak, owner asked for lighter).
 - **AC outdoor units:** outside the house; do not model them.
 - **Kitchen glass screen:** render it **partly open**.
 - **Foyer:** it lies *outside* the main door.

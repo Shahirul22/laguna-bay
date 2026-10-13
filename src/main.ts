@@ -22,7 +22,7 @@ import { type Rect, furniture, roomAt, viewpoints } from './plan';
 // seconds. Each stage yields a paint first so the screen shows what is going on;
 // it fades out once the textures are in and the first frames are rendered.
 const loadingEl = document.getElementById('loading')!;
-const STAGES = 5;
+const STAGES = 8;
 let stageNo = 0, assetFrac = 0, sceneReady = false, assetsLoaded = false;
 const setBar = () => { document.getElementById('loading-bar')!.style.width = `${Math.round(((stageNo / STAGES) * 0.75 + assetFrac * 0.25) * 100)}%`; };
 const nextPaint = () => new Promise<void>((r) => requestAnimationFrame(() => setTimeout(r)));
@@ -320,7 +320,21 @@ function perfTick() {
 }
 
 // ---- loop ----
-await stage('Preparing shaders and shadows…'); // the first frames compile them
+// Day, evening and plan view each switch a different set of lights, and every light-count change needs
+// new shader programs (evening also adds its own tone-mapping and sky programs). Real frames in each
+// state compile exactly the programs that state uses, and showing every model uploads its textures, so
+// toggling the light or walking into a new room later doesn't freeze. The spinner keeps turning meanwhile.
+const startMode = mode, overlayWas = overlay.hidden;
+cullModels(undefined);
+for (const [m, p, label] of [['evening', false, 'evening'], ['evening', true, 'plan view'], ['day', true, 'plan view'], [startMode, false, 'daylight']] as const) {
+  await stage(`Preparing ${label} lighting…`);
+  setMode(m);
+  setPlan(p);
+  if (p) plan.update(camera, innerWidth, innerHeight);
+  composer.render();
+}
+overlay.hidden = overlayWas;
+status();
 const timer = new THREE.Timer();
 timer.connect(document);
 let frames = 0;

@@ -149,7 +149,7 @@ export const furniture = [
   { id: 'upper-bottom-2', front: 'N', room: 'kitchen', label: '', kind: 'upper', r: [3760, 9295, 4820, 9645], z: 1500, h: 2300 },
 
   // Yard
-  { id: 'washer', front: 'N', room: 'yard', label: 'Washer', kind: 'appliance', r: [5000, 9030, 5600, 9630], h: 850 },
+  { id: 'washer', front: 'N', room: 'yard', label: 'Top-load washer', kind: 'appliance', r: [5000, 9030, 5600, 9630], h: 980 }, // real top-loaders are 970–1050 tall (lid closed)
   { id: 'yard-cabinet', front: 'N', room: 'yard', label: '', kind: 'upper', r: [4990, 9295, 5900, 9645], z: 1500, h: 2200 },
   { id: 'drying-rack', front: 'S', room: 'yard', label: 'Ceiling drying rack', kind: 'soft', r: [5550, 7950, 6150, 9050], z: 2300, h: 2350 },
   { id: 'floor-trap', room: 'yard', label: 'FT', kind: 'tech', c: [6100, 9495], d: 120, h: 5 },

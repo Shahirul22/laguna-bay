@@ -5,6 +5,7 @@
 > - **Less wood:** grey marble (sintered-stone look) replaces the oak/walnut on the TV wall, coffee and dining tables, kitchen base units and worktop, backsplash, vanities and bedside tops. Oak stays on the dining chairs only; walnut on the main door.
 > - **Gaming room (§8)** styled as a gaming room: black desks, racing chairs, RGB cove, hexagon light panels, RGB PCs, dark rug. Vinyl lightened.
 > - **Decor:** plants, vases and framed art (no effect on clearances).
+> - **Real-product detail (v3.1):** sofas, beds with bedding, gaming chairs, fridge and a **top-load washer** (980 tall) rebuilt from real product proportions; floors, tiles, cabinets and steel re-textured from scans.
 
 > **v2 changes (after your review on 2026-10-04):**
 > - **Master wardrobe enlarged** from 1510 to **2110 hanging width**, now more than Bedroom 2's 2010 (see §5).
@@ -734,15 +735,15 @@ The same palette runs through the whole house. The hex values are what the 3D mo
 
 | Item | Size (W × D × H) | Notes |
 |---|---|---|
-| Front-load washer | 600 × 600 × 850 | At the plan's position, near the drain |
-| Stacked dryer (optional) | 600 × 600 × 850 | On a stacking kit; total height 1700 |
+| **Top-load** washer (v3: owner prefers top-open) | 600 × 600 × 980 | At the plan's position, near the drain. Real top-loaders are 970–1050 tall; the lid opens upward, so the cabinet above (underside at 1500) still clears it closed |
+| Dryer | n/a | A dryer can't stack on a top-loader (lid access); there is room for one machine only |
 | Wall cabinet | 910 × 350 × 700, at 1500–2200 | Above the washer, for detergent and cleaning supplies |
 | Ceiling drying rack | 600 × 1100 rods | Pulley type |
 | Bracket-mounted utility sink (optional) | 450 × 400 | |
 | Bedroom 3 AC compressor (maybe) | about 750 × 280 × 550 | |
 
 **Proposed layout**
-- **Washer** in the bottom-left corner, X 5000–5600, Y 9030–9630, door facing up toward the yard door.
+- **Washer** in the bottom-left corner, X 5000–5600, Y 9030–9630, lid and controls facing up toward the yard door (rear console against the wall).
 - **Wall cabinet** above it.
 - **Drying rack** on the ceiling against the right/open side, Y 7950–9050, where air moves best and which is away from Bedroom 3's window.
 - **Floor trap** kept clear.
@@ -879,7 +880,7 @@ Struck-through items are settled. The open items below take the default shown, s
 | # | Question | My default if you don't answer |
 |---|---|---|
 | Q-Y1 | What is on the yard's open side? | Parapet at 1000 + open above |
-| Q-Y2 | Washer, or washer + stacked dryer? | Washer only |
+| ~~Q-Y2~~ | **Settled (v3):** one top-load washer, no dryer | |
 | Q-MB2 | Wall-hung or floor WC in the ensuite | Floor WC |
 
 ---

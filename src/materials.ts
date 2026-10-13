@@ -104,71 +104,82 @@ function tiles(o: TileOpts) {
   return { map: tex(c, mW, mH), bump: tex(b, mW, mH, false) };
 }
 
-/** Wood veneer/laminate: boards along U with wavy grain lines. */
-function wood(base: string, o: { boardMm: number; lenMm: number; seed: number; contrast?: number; pxPerMm?: number }) {
-  const ppm = o.pxPerMm ?? 0.5;
-  const W = Math.round(o.lenMm * ppm), H = Math.round(o.boardMm * 6 * ppm);
-  const [c, ctx] = canvas(W, H);
-  const r = rng(o.seed);
-  const k = o.contrast ?? 1;
-  const bh = H / 6;
-  for (let i = 0; i < 6; i++) {
-    ctx.fillStyle = shade(base, 1 + (r() - 0.5) * 0.12 * k);
-    ctx.fillRect(0, i * bh, W, bh);
-    // grain lines
-    const lines = 26 + Math.floor(r() * 14);
-    for (let j = 0; j < lines; j++) {
-      const y0 = i * bh + r() * bh, amp = 1 + r() * bh * 0.08, freq = (1 + r() * 3) * Math.PI * 2 / W, ph = r() * 6;
-      ctx.strokeStyle = r() > 0.5 ? `rgba(60,35,15,${(0.05 + r() * 0.12) * k})` : `rgba(255,240,215,${(0.04 + r() * 0.08) * k})`;
-      ctx.lineWidth = 0.6 + r() * 1.6;
-      ctx.beginPath();
-      for (let x = 0; x <= W; x += 8) {
-        const y = y0 + Math.sin(x * freq + ph) * amp + Math.sin(x * freq * 3.7 + ph) * amp * 0.25;
-        x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-    }
-    // occasional cathedral arcs
-    for (let j = 0; j < 2; j++) {
-      const cx = r() * W, cy = i * bh + bh / 2, len = W * (0.1 + r() * 0.15);
-      for (let a = 0; a < 6; a++) {
-        ctx.strokeStyle = `rgba(70,40,15,${0.06 * k})`;
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.ellipse(cx, cy, len * (1 - a * 0.13), bh * 0.35 * (1 - a * 0.13), 0, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    }
-  }
-  noise(ctx, W, H, 8 * k, o.seed + 3);
-  // the canvas tiles in both directions; boards seam vertically via clip
-  return tex(c, o.lenMm / 1000, (o.boardMm * 6) / 1000);
+// ---------------------------------------------------------------------------
+// Floors and wall tiles from scans. Each tile (or plank) is cut from a random
+// spot of a CC0 scan, so neighbours differ the way real porcelain batches do
+// and the pattern never visibly repeats. Colour, normal and roughness are cut
+// identically. The scan loads asynchronously; the canvases fill in when it lands.
+
+const imgLoader = new THREE.ImageLoader(); // tracked by the loading screen
+const imgUrl = (name: string, kind: string) => `${import.meta.env.BASE_URL}textures/${name}_${kind}.jpg`;
+
+interface ScanTileOpts {
+  scan: string; scanMm: number;            // scan name; real size the scan covers
+  tileW: number; tileH: number; cols: number; rows: number; ppm: number; // mm, px per mm
+  groutMm: number; grout: string; offset?: number; seed: number; shade?: number; // shade = per-tile brightness variation
 }
 
-/** Staggered plank floor (SPC vinyl). */
-function planks(base: string, seed: number) {
+function scanTiles(o: ScanTileOpts) {
+  const W = Math.round(o.tileW * o.cols * o.ppm), H = Math.round(o.tileH * o.rows * o.ppm);
+  const [c, cx] = canvas(W, H), [n, nx] = canvas(W, H), [r, rx] = canvas(W, H);
+  cx.fillStyle = o.grout; cx.fillRect(0, 0, W, H);
+  nx.fillStyle = '#8080ff'; nx.fillRect(0, 0, W, H);
+  rx.fillStyle = '#fff'; rx.fillRect(0, 0, W, H);
+  const mW = (o.tileW * o.cols) / 1000, mH = (o.tileH * o.rows) / 1000;
+  const out = { map: tex(c, mW, mH), normalMap: tex(n, mW, mH, false), roughnessMap: tex(r, mW, mH, false) };
+  const load = (kind: string) => new Promise<HTMLImageElement>((res) => imgLoader.load(imgUrl(o.scan, kind), res));
+  Promise.all([load('color'), load('normal'), load('rough')]).then(([ci, ni, ri]) => {
+    const rnd = rng(o.seed), g = Math.max(1, o.groutMm * o.ppm);
+    const tw = o.tileW * o.ppm, th = o.tileH * o.ppm;
+    const cw = Math.min(ci.width, (o.tileW / o.scanMm) * ci.width), ch = Math.min(ci.height, (o.tileH / o.scanMm) * ci.height);
+    for (let row = 0; row < o.rows; row++) {
+      const off = (((o.offset ?? 0) * row) % 1) * tw;
+      for (let col = -1; col < o.cols; col++) {
+        const sx = rnd() * (ci.width - cw), sy = rnd() * (ci.height - ch);
+        const x = col * tw + off + g / 2, y = row * th + g / 2, w = tw - g, h = th - g;
+        for (const [ctx, img] of [[cx, ci], [nx, ni], [rx, ri]] as const) ctx.drawImage(img, sx, sy, cw, ch, x, y, w, h);
+        if (o.shade) { // a batch-to-batch shade difference
+          const k = (rnd() - 0.5) * o.shade;
+          cx.fillStyle = k > 0 ? `rgba(255,255,255,${k})` : `rgba(0,0,0,${-k})`;
+          cx.fillRect(x, y, w, h);
+        }
+        // tile that wraps the canvas edge: repeat it on the opposite side
+        if (x + w > W) for (const [ctx, img] of [[cx, ci], [nx, ni], [rx, ri]] as const) ctx.drawImage(img, sx, sy, cw, ch, x - W, y, w, h);
+      }
+    }
+    for (const t of [out.map, out.normalMap, out.roughnessMap]) t.needsUpdate = true;
+  });
+  return out;
+}
+
+/** Staggered plank floor cut from a wood scan (grain along X). */
+function scanPlanks(scanName: string, scanMm: number, seed: number, shade: number) {
   const ppm = 0.6, L = 1220, Wd = 180, rows = 8, cols = 2;
   const W = Math.round(L * cols * ppm), H = Math.round(Wd * rows * ppm);
-  const [c, ctx] = canvas(W, H);
-  const [b, bctx] = canvas(W, H);
-  const grain = wood(base, { boardMm: Wd, lenMm: L * 2, seed, contrast: 1.3, pxPerMm: ppm }).image as HTMLCanvasElement;
-  const r = rng(seed + 1);
-  bctx.fillStyle = '#000'; bctx.fillRect(0, 0, W, H);
-  for (let row = 0; row < rows; row++) {
-    const off = r() * L * ppm;
-    for (let col = -1; col <= cols; col++) {
-      const x = col * L * ppm + off, y = row * Wd * ppm;
-      const sy = Math.floor(r() * 5) * Wd * ppm;
-      ctx.save();
-      ctx.beginPath(); ctx.rect(x + 1, y + 1, L * ppm - 2, Wd * ppm - 2); ctx.clip();
-      ctx.filter = `brightness(${0.9 + r() * 0.2})`;
-      ctx.drawImage(grain, x - r() * L * ppm * 0.9, y - sy);
-      ctx.restore();
-      bctx.fillStyle = '#fff'; bctx.fillRect(x + 1, y + 1, L * ppm - 2, Wd * ppm - 2);
+  const [c, cx] = canvas(W, H), [n, nx] = canvas(W, H), [r, rx] = canvas(W, H);
+  cx.fillStyle = '#1a1612'; cx.fillRect(0, 0, W, H);
+  nx.fillStyle = '#8080ff'; nx.fillRect(0, 0, W, H);
+  rx.fillStyle = '#fff'; rx.fillRect(0, 0, W, H);
+  const mW = (L * cols) / 1000, mH = (Wd * rows) / 1000;
+  const out = { map: tex(c, mW, mH), normalMap: tex(n, mW, mH, false), roughnessMap: tex(r, mW, mH, false) };
+  const load = (kind: string) => new Promise<HTMLImageElement>((res) => imgLoader.load(imgUrl(scanName, kind), res));
+  Promise.all([load('color'), load('normal'), load('rough')]).then(([ci, ni, ri]) => {
+    const rnd = rng(seed);
+    const cw = Math.min(ci.width, (L / scanMm) * ci.width), ch = Math.min(ci.height, (Wd / scanMm) * ci.height);
+    for (let row = 0; row < rows; row++) {
+      const off = rnd() * L * ppm;
+      for (let col = -1; col <= cols; col++) {
+        const sx = rnd() * (ci.width - cw), sy = rnd() * (ci.height - ch);
+        const x = col * L * ppm + off + 1, y = row * Wd * ppm + 1, w = L * ppm - 2, h = Wd * ppm - 2;
+        for (const [ctx, img] of [[cx, ci], [nx, ni], [rx, ri]] as const) ctx.drawImage(img, sx, sy, cw, ch, x, y, w, h);
+        const k = (rnd() - 0.5) * shade;
+        cx.fillStyle = k > 0 ? `rgba(255,255,255,${k})` : `rgba(0,0,0,${-k})`;
+        cx.fillRect(x, y, w, h);
+      }
     }
-  }
-  ctx.filter = 'none';
-  return { map: tex(c, (L * cols) / 1000, (Wd * rows) / 1000), bump: tex(b, (L * cols) / 1000, (Wd * rows) / 1000, false) };
+    for (const t of [out.map, out.normalMap, out.roughnessMap]) t.needsUpdate = true;
+  });
+  return out;
 }
 
 function grass(seed: number) {
@@ -342,6 +353,8 @@ export function kelvin(k: number) {
 }
 
 const std = (p: THREE.MeshStandardMaterialParameters) => new THREE.MeshStandardMaterial(p);
+/** Fabric with a soft sheen at grazing angles (velvety fuzz); costs a little more than std. */
+const fabricMat = (p: THREE.MeshPhysicalMaterialParameters) => new THREE.MeshPhysicalMaterial({ sheen: 1, sheenRoughness: 0.75, sheenColor: new THREE.Color(0xffffff), ...p });
 
 // ---------------------------------------------------------------------------
 // Scanned CC0 maps (ambientCG, public/textures). Colour maps are tinted so
@@ -352,6 +365,7 @@ const std = (p: THREE.MeshStandardMaterialParameters) => new THREE.MeshStandardM
 const loader = new THREE.TextureLoader();
 const SCAN_MEAN: Record<string, [number, number, number]> = { // sRGB means of the colour maps
   oak: [123, 99, 78], fabric: [240, 240, 240], rug: [188, 176, 148], plaster: [190, 190, 187], marble: [173, 173, 182],
+  floor: [162, 152, 135], plank: [205, 156, 111], laminate: [238, 234, 233], bathfloor: [103, 108, 109], bathwall: [215, 215, 215], linen: [186, 186, 186],
 };
 const lin = (v: number) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; };
 
@@ -369,9 +383,9 @@ function tint(name: string, hex: string) {
   return new THREE.Color(c.r / mean[0], c.g / mean[1], c.b / mean[2]);
 }
 /** Scanned PBR material tinted to a palette colour. */
-function scanned(name: string, metres: number, hex: string, p: THREE.MeshStandardMaterialParameters & { normal?: number } = {}) {
-  const { normal = 0.6, ...rest } = p;
-  return std({
+function scanned(name: string, metres: number, hex: string, p: THREE.MeshPhysicalMaterialParameters & { normal?: number; fabric?: boolean } = {}) {
+  const { normal = 0.6, fabric, ...rest } = p;
+  return (fabric ? fabricMat : std)({
     map: scan(name, metres, 'color'), color: tint(name, hex),
     normalMap: scan(name, metres, 'normal'), normalScale: new THREE.Vector2(normal, normal),
     roughnessMap: scan(name, metres, 'rough'), roughness: 1, ...rest,
@@ -387,13 +401,15 @@ function relief(name: string, metres: number, hex: string, normal: number, rough
 }
 
 export function createMaterials() {
-  const floorMain = tiles({ tileW: 600, tileH: 600, cols: 4, rows: 4, pxPerMm: 0.75, base: '#E3DCD1', grout: '#d2cabd', groutMm: 2, vary: 0.035, speckle: 7, clouds: 0.05, seed: 11 });
-  const floorBath = tiles({ tileW: 600, tileH: 600, cols: 3, rows: 3, pxPerMm: 0.6, base: '#5C5D5B', grout: '#4a4b49', groutMm: 2, vary: 0.06, speckle: 10, clouds: 0.08, seed: 12 });
-  const floorYard = tiles({ tileW: 600, tileH: 600, cols: 3, rows: 3, pxPerMm: 0.6, base: '#474846', grout: '#3a3a39', groutMm: 3, vary: 0.06, speckle: 22, clouds: 0.06, seed: 13 });
-  const bathWall = tiles({ tileW: 1200, tileH: 600, cols: 2, rows: 3, pxPerMm: 0.5, base: '#ECE8E1', grout: '#dcd7cf', groutMm: 2, vary: 0.025, speckle: 5, clouds: 0.06, seed: 14 });
+  const scanMat = (t: ReturnType<typeof scanTiles>, name: string, hex: string, rough: number, normal = 0.8) =>
+    std({ map: t.map, normalMap: t.normalMap, normalScale: new THREE.Vector2(normal, normal), roughnessMap: t.roughnessMap, roughness: rough, color: tint(name, hex) });
+  const floorMain = scanTiles({ scan: 'floor', scanMm: 1200, tileW: 600, tileH: 600, cols: 4, rows: 4, ppm: 0.75, groutMm: 2, grout: '#8d8477', seed: 11, shade: 0.06 });
+  const floorBath = scanTiles({ scan: 'bathfloor', scanMm: 1200, tileW: 600, tileH: 600, cols: 3, rows: 3, ppm: 0.6, groutMm: 2, grout: '#4f5150', seed: 12, shade: 0.1 });
+  const floorYard = scanTiles({ scan: 'bathfloor', scanMm: 1200, tileW: 600, tileH: 600, cols: 3, rows: 3, ppm: 0.6, groutMm: 3, grout: '#3d3f3e', seed: 13, shade: 0.12 });
+  const bathWall = scanTiles({ scan: 'bathwall', scanMm: 1200, tileW: 1200, tileH: 600, cols: 2, rows: 3, ppm: 0.5, groutMm: 2, grout: '#b9b5ad', seed: 14, shade: 0.05 });
   const feature = tiles({ tileW: 75, tileH: 300, cols: 16, rows: 4, pxPerMm: 0.8, base: '#CFC6B8', grout: '#bdb4a6', groutMm: 2, vary: 0.08, speckle: 6, clouds: 0, seed: 15 });
   const corridor = tiles({ tileW: 600, tileH: 600, cols: 2, rows: 2, pxPerMm: 0.4, base: '#bdb8b0', grout: '#a9a49c', groutMm: 3, vary: 0.04, speckle: 10, clouds: 0.05, seed: 17 });
-  const vinyl = planks('#A08F7C', 21);
+  const vinyl = scanPlanks('plank', 1600, 21, 0.14);
 
 
   const tileMat = (t: ReturnType<typeof tiles>, rough: number, bump = 0.6) =>
@@ -408,13 +424,13 @@ export function createMaterials() {
     charcoal: relief('plaster', 1.6, '#2E2E2E', 0.25, 0.95),
     sill: std({ color: '#E9E5DE', roughness: 0.4 }),
 
-    floorMain: tileMat(floorMain, 0.42),
-    floorBath: tileMat(floorBath, 0.7),
-    floorYard: tileMat(floorYard, 0.85, 1),
-    floorVinyl: std({ map: vinyl.map, bumpMap: vinyl.bump, bumpScale: 0.6, roughness: 0.75, roughnessMap: scan('oak', 1.2, 'rough') }),
+    floorMain: scanMat(floorMain, 'floor', '#E3DCD1', 0.8),
+    floorBath: scanMat(floorBath, 'bathfloor', '#5C5D5B', 1),
+    floorYard: scanMat(floorYard, 'bathfloor', '#474846', 1, 1.1),
+    floorVinyl: std({ map: vinyl.map, normalMap: vinyl.normalMap, normalScale: new THREE.Vector2(0.7, 0.7), roughnessMap: vinyl.roughnessMap, roughness: 0.85, color: tint('plank', '#B3A18A') }),
     floorCorridor: tileMat(corridor, 0.8),
-    bathTile: tileMat(bathWall, 0.55),
-    yardTile: tileMat(bathWall, 0.55),
+    bathTile: scanMat(bathWall, 'bathwall', '#ECE8E1', 0.8, 0.5),
+    yardTile: scanMat(bathWall, 'bathwall', '#ECE8E1', 0.8, 0.5),
     featureTile: tileMat(feature, 0.6),
 
     oak: scanned('oak', 1.3, '#C9A57B', { normal: 0.45, roughness: 0.85 }),
@@ -423,13 +439,13 @@ export function createMaterials() {
     // The roughness scan averages ~0.07, so roughness 3 ≈ 0.2 (polished, soft reflections).
     marble: stone('marble', 1.6, '#D3D1CD', 3),
     marbleGrey: stone('marble', 1.6, '#9E9C98', 3.5),
-    cream: std({ color: '#ECE5D8', roughness: 0.6 }),
-    greige: std({ color: '#CFC6B8', roughness: 0.7 }),
-    upholstery: scanned('fabric', 0.22, '#D9CFC0', { normal: 0.9 }),
-    upholsteryDark: scanned('fabric', 0.22, '#B9AC98', { normal: 0.9 }),
-    linen: scanned('fabric', 0.15, '#F4F0E8', { normal: 0.5 }),
-    duvet: scanned('fabric', 0.15, '#EEE9E0', { normal: 0.5 }),
-    throwBlanket: scanned('fabric', 0.3, '#A8907A', { normal: 1.2 }),
+    cream: scanned('laminate', 0.8, '#ECE5D8', { normal: 0.3, roughness: 0.9 }),
+    greige: scanned('laminate', 0.8, '#CFC6B8', { normal: 0.3, roughness: 0.9 }),
+    upholstery: scanned('fabric', 0.22, '#D9CFC0', { normal: 0.9, fabric: true }),
+    upholsteryDark: scanned('fabric', 0.22, '#B9AC98', { normal: 0.9, fabric: true }),
+    linen: scanned('linen', 0.25, '#F4F0E8', { normal: 0.6, fabric: true }),
+    duvet: scanned('linen', 0.25, '#EEE9E0', { normal: 0.8, fabric: true }),
+    throwBlanket: scanned('fabric', 0.3, '#A8907A', { normal: 1.2, fabric: true }),
     rug: scanned('rug', 0.6, '#CDC3B3', { normal: 1.0 }),
     rugGreige: scanned('rug', 0.6, '#BDB2A2', { normal: 1.0 }),
     rugDark: scanned('rug', 0.5, '#34343a', { normal: 1.2 }),
@@ -444,7 +460,9 @@ export function createMaterials() {
     black: std({ color: '#1B1B1B', roughness: 0.45, metalness: 0.6 }),
     blackMatte: std({ color: '#1B1B1B', roughness: 0.8 }),
     charcoalBody: std({ color: '#2E2E2E', roughness: 0.65 }),
-    steel: std({ color: '#b7b9b9', roughness: 0.32, metalness: 0.75 }),
+    fridgeSide: std({ color: '#8f9396', roughness: 0.5, metalness: 0.55 }),
+    // brushed stainless: fine streak normal, uniform satin roughness (the scan's roughness map reads as blotches at appliance scale)
+    steel: std({ color: '#b7b9b9', metalness: 0.8, normalMap: scan('steel', 0.25, 'normal'), normalScale: new THREE.Vector2(0.18, 0.18), roughness: 0.38 }),
     alu: std({ color: '#4a4b4d', roughness: 0.45, metalness: 0.7 }),
     plastic: std({ color: '#f4f4f2', roughness: 0.35 }),
     ceramic: std({ color: '#FBFBF9', roughness: 0.12 }),
@@ -461,6 +479,10 @@ export function createMaterials() {
     led4000: new THREE.MeshBasicMaterial({ color: kelvin(4000) }),
     shade: std({ color: '#efe6d6', roughness: 1, side: THREE.DoubleSide, emissive: kelvin(2700), emissiveIntensity: 0 }),
     // RGB (gaming room), switched with the LED strips
+    ledRed: new THREE.MeshBasicMaterial({ color: '#ff3326' }),
+    rubber: std({ color: '#242526', roughness: 0.9 }),
+    washerBody: std({ color: '#e6e9ea', roughness: 0.32 }),
+    washerDeck: std({ color: '#b4bbc2', roughness: 0.38 }),
     rgbPurple: new THREE.MeshBasicMaterial({ color: '#7c4dff' }),
     rgbBlue: new THREE.MeshBasicMaterial({ color: '#3d7bff' }),
     rgbCyan: new THREE.MeshBasicMaterial({ color: '#22d3ee' }),

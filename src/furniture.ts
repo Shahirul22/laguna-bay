@@ -8,40 +8,10 @@ import * as THREE from 'three';
 import type { Materials } from './materials';
 import { box, cyl, mesh, place, rbox } from './geom';
 import { model } from './models';
+import { type Ctx, bed, decor, fronts, fridge, gamingChair, hw, sofa, washer } from './objects';
 import { type Front, type Item, type Rect, acUnits, furniture, m } from './plan';
 
-type Ctx = { M: Materials; it: Item; w: number; d: number; z: number; h: number };
-
 const GAP = 0.003; // door/drawer reveal
-
-// Hardware (handles, taps, trunking) and decor (vases, monitors, books) may
-// extend past the plan envelope; the accuracy check (?verify) measures the
-// item body without them.
-const hw = <T extends THREE.Object3D>(o: T) => { o.userData.hw = true; return o; };
-const decor = <T extends THREE.Object3D>(o: T) => { o.userData.decor = true; return o; };
-
-/** Door/drawer fronts across [x0,x1] × [y0,y1] on the plane z, split into n panels. */
-function fronts(g: THREE.Group, mat: THREE.Material, x0: number, x1: number, y0: number, y1: number, z: number, n: number,
-  handle?: { mat: THREE.Material; kind: 'top' | 'bottom' | 'vbar' | 'vbar-pair' }) {
-  const pw = (x1 - x0) / n;
-  for (let i = 0; i < n; i++) {
-    const a = x0 + i * pw + GAP / 2, b = x0 + (i + 1) * pw - GAP / 2;
-    g.add(box(mat, a, b, y0 + GAP / 2, y1 - GAP / 2, z, z + 0.018, { rot: true }));
-    if (!handle) continue;
-    const zz = z + 0.018;
-    if (handle.kind === 'top') g.add(hw(box(handle.mat, a + 0.02, b - 0.02, y1 - 0.025, y1 - GAP, zz, zz + 0.012)));
-    else if (handle.kind === 'bottom') g.add(hw(box(handle.mat, a + 0.02, b - 0.02, y0 + GAP, y0 + 0.025, zz, zz + 0.012)));
-    else {
-      // vertical bar near the meeting edge (pairs meet in the middle)
-      const right = handle.kind === 'vbar-pair' ? i % 2 === 0 : i < n - 1 || n === 1;
-      const hx = right ? b - 0.04 : a + 0.03;
-      const hy = Math.min(y1 - 0.05, Math.max(y0 + 0.4, 1.05));
-      const len = Math.min(0.3, (y1 - y0) * 0.4);
-      g.add(hw(box(handle.mat, hx, hx + 0.012, hy - len / 2, hy + len / 2, zz + 0.006, zz + 0.022)));
-      for (const e of [-1, 1]) g.add(hw(box(handle.mat, hx + 0.003, hx + 0.009, hy + e * (len / 2 - 0.02) - 0.004, hy + e * (len / 2 - 0.02) + 0.004, zz, zz + 0.006)));
-    }
-  }
-}
 
 function legs(g: THREE.Group, mat: THREE.Material, w: number, d: number, inset: number, y1: number, size: number, round = false) {
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
@@ -53,79 +23,6 @@ function legs(g: THREE.Group, mat: THREE.Material, w: number, d: number, inset: 
 
 // ---------------------------------------------------------------------------
 // Generic pieces
-
-function sofa({ M, w, d, h }: Ctx, seats: number) {
-  const g = new THREE.Group();
-  const arm = 0.16, legH = 0.1, seatTop = 0.45, back = 0.22;
-  const U = M.upholstery;
-  // legs
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(cyl(M.black, sx * (w / 2 - 0.07), sz * (d / 2 - 0.08), 0, legH, 0.018, 0.012, { seg: 10 }));
-  g.add(rbox(U, -w / 2, w / 2, legH, 0.36, -d / 2, d / 2, 0.03));                      // base
-  g.add(rbox(U, -w / 2, -w / 2 + arm, legH, 0.62, -d / 2, d / 2, 0.05));                // arms
-  g.add(rbox(U, w / 2 - arm, w / 2, legH, 0.62, -d / 2, d / 2, 0.05));
-  g.add(rbox(U, -w / 2 + arm, w / 2 - arm, legH, h - 0.12, -d / 2, -d / 2 + 0.16, 0.04)); // back frame
-  const sw = (w - 2 * arm) / seats;
-  for (let i = 0; i < seats; i++) {
-    const x0 = -w / 2 + arm + i * sw + 0.004, x1 = x0 + sw - 0.008;
-    g.add(rbox(U, x0, x1, 0.36, seatTop, -d / 2 + back - 0.04, d / 2 - 0.02, 0.05, { seg: 4 }));
-    const bc = rbox(U, x0, x1, 0, h - seatTop - 0.025, 0, 0.17, 0.07, { seg: 4 });
-    bc.rotation.x = -0.16;
-    bc.position.y += seatTop - 0.02;
-    bc.position.z += -d / 2 + 0.13;
-    g.add(bc);
-  }
-  // throw cushions at both ends
-  for (const s of [-1, 1]) {
-    const c = rbox(s < 0 ? M.throwBlanket : M.upholsteryDark, -0.2, 0.2, 0, 0.38, -0.07, 0.07, 0.06, { seg: 4 });
-    c.position.set(s * (w / 2 - arm - 0.27), seatTop + 0.15, -d / 2 + back + 0.07);
-    c.rotation.set(-0.25, s * 0.25, s * 0.06);
-    g.add(c);
-  }
-  return g;
-}
-
-function bed({ M, w, d }: Ctx, headH: number, opts: { ledge?: boolean; pillows: number }) {
-  const g = new THREE.Group();
-  const hbT = 0.09, base = 0.34, matTop = 0.6;
-  // headboard (upholstered) against the back wall
-  const hbTop = opts.ledge ? headH - 0.025 : headH;
-  g.add(rbox(M.upholstery, -w / 2, w / 2, 0.06, hbTop, -d / 2, -d / 2 + hbT, 0.03));
-  for (let i = 1; i < 6; i++) { // vertical channels
-    const x = -w / 2 + (w * i) / 6;
-    g.add(box(M.upholsteryDark, x - 0.003, x + 0.003, 0.4, hbTop - 0.06, -d / 2 + hbT, -d / 2 + hbT + 0.004, { shadow: false }));
-  }
-  if (opts.ledge) {
-    g.add(box(M.marble, -w / 2, w / 2, hbTop, headH, -d / 2, -d / 2 + hbT + 0.04));
-    const led = box(M.led2700, -w / 2 + 0.05, w / 2 - 0.05, hbTop - 0.012, hbTop, -d / 2 + hbT + 0.025, -d / 2 + hbT + 0.035, { shadow: false });
-    led.userData.emissive = true;
-    g.add(led);
-  }
-  // platform (lift-up storage base), recessed plinth
-  g.add(box(M.blackMatte, -w / 2 + 0.08, w / 2 - 0.08, 0, 0.07, -d / 2 + hbT + 0.08, d / 2 - 0.08));
-  g.add(rbox(M.upholstery, -w / 2, w / 2, 0.07, base, -d / 2 + hbT, d / 2, 0.025));
-  // mattress
-  const mw = w - 0.06, mz0 = -d / 2 + hbT + 0.01, mz1 = d / 2 - 0.03;
-  g.add(rbox(M.linen, -mw / 2, mw / 2, base, matTop, mz0, mz1, 0.06, { seg: 4 }));
-  // duvet over the lower ~70%, folded band at the top edge
-  const dz0 = mz0 + (mz1 - mz0) * 0.3;
-  g.add(rbox(M.duvet, -mw / 2 - 0.02, mw / 2 + 0.02, matTop - 0.18, matTop + 0.05, dz0, mz1 + 0.02, 0.06, { seg: 4 }));
-  g.add(rbox(M.duvet, -mw / 2 - 0.022, mw / 2 + 0.022, matTop - 0.16, matTop + 0.07, dz0 - 0.05, dz0 + 0.2, 0.07, { seg: 4 }));
-  // throw across the foot
-  g.add(rbox(M.throwBlanket, -mw / 2 - 0.025, mw / 2 + 0.025, matTop - 0.22, matTop + 0.075, mz1 - 0.55, mz1 + 0.025, 0.04));
-  // pillows
-  // pillows: two side by side, leaning on the headboard; king beds get a second (decor) row
-  const cols = 2, rows = opts.pillows > 2 ? 2 : 1;
-  const pw = Math.min(0.7, (mw - 0.1) / cols - 0.03);
-  const lift = Math.min(0.2, headH - matTop - 0.238); // a leaning pillow reaches 0.238 above its centre
-  for (let c = 0; c < cols; c++) for (let k = 0; k < rows; k++) {
-    const x = (c - 0.5) * (pw + 0.03);
-    const p = rbox(k ? M.upholsteryDark : M.linen, -pw / 2 + k * 0.05, pw / 2 - k * 0.05, -0.23 + k * 0.04, 0.23 - k * 0.04, -0.07, 0.07, 0.065, { seg: 4 });
-    p.position.set(x, matTop + lift - k * 0.03, mz0 + 0.1 + k * 0.13);
-    p.rotation.x = -0.45;
-    g.add(p);
-  }
-  return g;
-}
 
 function bowl(M: Materials, rTop: number, depth: number) {
   const pts = [];
@@ -286,24 +183,7 @@ const builders: Record<string, (c: Ctx) => THREE.Object3D> = {
     fronts(g, M.cream, -w / 2, w / 2, 0.08, h, d / 2 - 0.018, 2, { mat: M.black, kind: 'vbar-pair' });
     return g;
   },
-  'fridge-housing': ({ M, w, d, h }) => {
-    const g = new THREE.Group();
-    const t = 0.018;
-    g.add(box(M.cream, -w / 2, -w / 2 + t, 0, h, -d / 2, d / 2, { rot: true }));
-    g.add(box(M.cream, w / 2 - t, w / 2, 0, h, -d / 2, d / 2, { rot: true }));
-    g.add(box(M.cream, -w / 2, w / 2, h - t, h, -d / 2, d / 2));
-    // top cupboard over the fridge
-    fronts(g, M.cream, -w / 2 + t, w / 2 - t, 1.86, h - t, d / 2 - 0.018, 2, { mat: M.black, kind: 'bottom' });
-    g.add(box(M.cream, -w / 2 + t, w / 2 - t, 1.84, 1.86, -d / 2, d / 2));
-    // freestanding bottom-freezer fridge, 4 mm air gap each side
-    const fw = w - 2 * t - 0.008, fx0 = -fw / 2, fx1 = fw / 2;
-    g.add(box(M.steel, fx0, fx1, 0.01, 1.83, -d / 2 + 0.03, d / 2 - 0.07));
-    g.add(box(M.steel, fx0, fx1, 0.72, 1.83, d / 2 - 0.07, d / 2 - 0.03));  // fridge door
-    g.add(box(M.steel, fx0, fx1, 0.01, 0.715, d / 2 - 0.07, d / 2 - 0.03)); // freezer door
-    g.add(hw(box(M.black, fx1 - 0.06, fx1 - 0.045, 0.9, 1.6, d / 2 - 0.03, d / 2 - 0.005)));
-    g.add(hw(box(M.black, fx0 + 0.08, fx1 - 0.08, 0.6, 0.615, d / 2 - 0.03, d / 2 - 0.005)));
-    return g;
-  },
+  'fridge-housing': fridge,
   counter: ({ M, it, w, d }) => {
     // carcass + fronts only; the marble worktop is built in world space (worktops())
     const g = new THREE.Group();
@@ -406,19 +286,7 @@ const builders: Record<string, (c: Ctx) => THREE.Object3D> = {
     if (it.id.startsWith('kitchen-glass-slide')) g.add(hw(box(M.black, w / 2 - 0.06, w / 2 - 0.045, 0.9, 1.4, d / 2, d / 2 + 0.015)));
     return g;
   },
-  washer: ({ M, w, d, h }) => {
-    const g = new THREE.Group();
-    g.add(rbox(M.plastic, -w / 2, w / 2, 0, h, -d / 2, d / 2, 0.02));
-    g.add(hw(box(M.screenOff, -w / 2 + 0.03, -w / 2 + 0.23, h - 0.1, h - 0.03, d / 2, d / 2 + 0.003, { shadow: false })));
-    g.add(hw(cyl(M.steel, w / 2 - 0.12, d / 2 + 0.01, h - 0.085, h - 0.045, 0.03, 0.03).rotateX(Math.PI / 2)));
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.025, 16, 48), M.steel);
-    ring.position.set(0, 0.42, d / 2 + 0.012);
-    g.add(hw(ring));
-    const door = new THREE.Mesh(new THREE.CircleGeometry(0.16, 48), M.tinted);
-    door.position.set(0, 0.42, d / 2 + 0.014);
-    g.add(hw(door));
-    return g;
-  },
+  washer,
   'drying-rack': ({ M, w, d, z, h }) => {
     const g = new THREE.Group();
     for (const s of [-1, 1]) {
@@ -533,46 +401,7 @@ const builders: Record<string, (c: Ctx) => THREE.Object3D> = {
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(M.blackMatte, sx * (w / 2 - 0.03) - 0.01, sx * (w / 2 - 0.03) + 0.01, 0, 0.02, sz * (d / 2 - 0.04) - 0.01, sz * (d / 2 - 0.04) + 0.01));
     return g;
   },
-  'gaming-chair': ({ M, h, it }) => {
-    // racing-style chair: bucket seat, winged high back, headrest + lumbar pillows, accent panels
-    const g = new THREE.Group();
-    const A = it.id === 'chair-a' ? M.accentRed : M.accentCyan;
-    const L = M.leather;
-    const rad = m(it.d!) / 2 - 0.03;
-    for (let i = 0; i < 5; i++) {
-      const a = -Math.PI / 2 + (i / 5) * Math.PI * 2; // one leg forward, symmetric left/right
-      const holder = new THREE.Group();
-      holder.add(box(M.black, 0, rad, 0.06, 0.09, -0.02, 0.02));
-      holder.rotation.y = a;
-      g.add(holder);
-      g.add(cyl(M.blackMatte, Math.cos(a) * rad, -Math.sin(a) * rad, 0, 0.06, 0.03, 0.03, { seg: 12 }));
-    }
-    g.add(cyl(M.black, 0, 0, 0.09, 0.42, 0.025, 0.025, { seg: 16 }));
-    g.add(box(M.blackMatte, -0.16, 0.16, 0.42, 0.45, -0.18, 0.16));
-    // seat with raised side bolsters
-    g.add(rbox(L, -0.2, 0.2, 0.45, 0.53, -0.22, 0.25, 0.035, { seg: 4 }));
-    for (const s of [-1, 1]) g.add(rbox(A, s * 0.2 - 0.05, s * 0.2 + 0.05, 0.46, 0.57, -0.22, 0.25, 0.04, { seg: 4 }));
-    // back, reclined about a pivot behind the seat
-    const back = new THREE.Group();
-    const bh = h - 0.54;
-    back.add(rbox(L, -0.2, 0.2, 0, bh, -0.09, 0, 0.04, { seg: 4 }));
-    for (const s of [-1, 1]) {
-      back.add(rbox(A, s * 0.2 - 0.06, s * 0.2 + 0.06, 0.02, bh * 0.62, -0.1, 0.02, 0.04, { seg: 4 }));  // side wings
-      back.add(rbox(L, s * 0.18 - 0.08, s * 0.18 + 0.08, bh * 0.6, bh * 0.82, -0.1, 0.01, 0.05, { seg: 4 })); // shoulder wings
-      back.add(box(A, s * 0.06 - 0.012, s * 0.06 + 0.012, 0.05, bh - 0.04, -0.001, 0.003, { shadow: false })); // stripes
-    }
-    back.add(rbox(L, -0.13, 0.13, bh * 0.82, bh, -0.09, 0, 0.05, { seg: 4 }));                    // head section
-    back.add(rbox(L, -0.11, 0.11, bh * 0.8, bh * 0.92, 0, 0.07, 0.035, { seg: 4 }));            // headrest pillow
-    back.add(rbox(A, -0.14, 0.14, 0.06, 0.24, 0, 0.07, 0.035, { seg: 4 }));                      // lumbar pillow
-    back.position.set(0, 0.53, -0.165);
-    back.rotation.x = -0.1;
-    g.add(back);
-    for (const s of [-1, 1]) {
-      g.add(box(M.black, s * 0.27 - 0.015, s * 0.27 + 0.015, 0.47, 0.68, -0.08, -0.05));
-      g.add(rbox(M.blackMatte, s * 0.27 - 0.04, s * 0.27 + 0.04, 0.68, 0.71, -0.17, 0.1, 0.01));
-    }
-    return g;
-  },
+  'gaming-chair': gamingChair,
   'gaming-storage': ({ M, w, d, h }) => {
     const g = new THREE.Group();
     g.add(box(M.charcoalBody, -w / 2, w / 2, 0, h, -d / 2, d / 2 - 0.018));
