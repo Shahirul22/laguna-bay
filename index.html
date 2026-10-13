@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Laguna Bay · Type A walkthrough</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="crosshair"></div>
+    <div id="hud">
+      <div id="room"></div>
+      <div id="status"></div>
+      <div id="readout"></div>
+    </div>
+    <div id="perf"></div>
+    <div id="labels"></div>
+    <div id="overlay">
+      <div class="card">
+        <h1>Laguna Bay · Type A</h1>
+        <p class="sub">900 sq ft · 9450 × 9800 mm · all sizes from <code>analysis/tools/layout.mjs</code></p>
+        <button id="enter">Click to walk</button>
+        <table class="keys">
+          <tr><td>W A S D</td><td>walk (Shift = faster)</td></tr>
+          <tr><td>Mouse</td><td>look</td></tr>
+          <tr><td>E</td><td>open / close nearest door</td></tr>
+          <tr><td>T</td><td>tape measure: click two points (mm)</td></tr>
+          <tr><td>P</td><td>top-down plan (click to measure, double-click to stand there)</td></tr>
+          <tr><td>L</td><td>day / evening lighting</td></tr>
+          <tr><td>G</td><td>ambient occlusion on / off (performance)</td></tr>
+          <tr><td>1–0</td><td>jump to a room</td></tr>
+          <tr><td>Esc</td><td>release mouse / this panel</td></tr>
+        </table>
+        <div id="rooms"></div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
